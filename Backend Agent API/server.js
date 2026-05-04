@@ -13,7 +13,7 @@ const port = process.env.PORT || 3000;
 
 // Security & Middleware Configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3001',
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -114,7 +114,13 @@ function detectStep(text) {
  * @returns {Promise<Object>} Research results
  * @throws {Error} If pipeline fails or times out
  */
-function runResearch(topic) {
+/**
+ * Run research pipeline with progress reporting.
+ * @param {string} topic - Sanitized research topic
+ * @param {Function} onProgress - Callback for progress updates
+ * @returns {Promise<Object>} Research results
+ */
+function runResearch(topic, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     let pythonCommand;
     try {
@@ -155,6 +161,7 @@ function runResearch(topic) {
       const newStep = detectStep(text);
       if (newStep && newStep !== currentStep) {
         currentStep = newStep;
+        onProgress(currentStep);
         console.log(`[PIPELINE] Step: ${currentStep}`);
       }
       console.log(`[PYTHON] ${text.trim()}`);
@@ -190,13 +197,18 @@ function runResearch(topic) {
         return reject(new Error(`Pipeline failed: ${errorMsg}`));
       }
 
-      const output = stdoutBuffer.join('').trim();
-      if (!output) {
+      const rawOutput = stdoutBuffer.join('').trim();
+      if (!rawOutput) {
         return reject(new Error('No output from Python'));
       }
 
+      // Find the JSON object in the output (it might contain progress text)
       try {
-        const parsed = JSON.parse(output);
+        const jsonMatch = rawOutput.match(/\{[\s\S]*\}$/);
+        if (!jsonMatch) {
+          throw new Error('Could not find JSON in output');
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
         // Validate output structure
         if (!parsed.search_results || !parsed.report || !parsed.feedback) {
           return reject(new Error('Invalid output structure from pipeline'));
@@ -204,12 +216,13 @@ function runResearch(topic) {
         resolve(parsed);
       } catch (error) {
         reject(
-          new Error(`JSON parse error: ${error.message}. Output: ${output.substring(0, 200)}`)
+          new Error(`JSON parse error: ${error.message}. Output: ${rawOutput.substring(0, 200)}`)
         );
       }
     });
   });
 }
+
 /**
  * Health check endpoint.
  */
@@ -218,7 +231,54 @@ app.get('/health', (_req, res) => {
 });
 
 /**
- * Research endpoint with validation and error handling.
+ * SSE Research endpoint for real-time updates.
+ */
+app.get('/api/research/stream', async (req, res) => {
+  const { topic: rawTopic } = req.query;
+
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    const topic = validateAndSanitizeTopic(rawTopic);
+    console.log(`[API] Starting stream research for topic: ${topic}`);
+
+    sendEvent('status', { step: 'initializing', message: 'Starting research agents...' });
+
+    const result = await runResearch(topic, (step) => {
+      const messages = {
+        searching: 'Search agent is looking for information...',
+        reading: 'Reader agent is analyzing search results...',
+        writing: 'Writer agent is drafting the report...',
+        critic: 'Critic agent is reviewing the report...',
+      };
+      sendEvent('status', { step, message: messages[step] || `Running ${step}...` });
+    });
+
+    sendEvent('result', {
+      success: true,
+      topic,
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+    
+    res.end();
+  } catch (error) {
+    console.error(`[API ERROR] ${error.message}`);
+    sendEvent('error', { error: error.message });
+    res.end();
+  }
+});
+
+/**
+ * Research endpoint with validation and error handling (Legacy POST).
  */
 app.post('/api/research', async (req, res) => {
   try {
@@ -231,10 +291,7 @@ app.post('/api/research', async (req, res) => {
     res.json({
       success: true,
       topic,
-      search_results: result.search_results,
-      scraped_content: result.scraped_content,
-      report: result.report,
-      feedback: result.feedback,
+      ...result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -252,6 +309,7 @@ app.post('/api/research', async (req, res) => {
     });
   }
 });
+
 
 /**
  * 404 handler.

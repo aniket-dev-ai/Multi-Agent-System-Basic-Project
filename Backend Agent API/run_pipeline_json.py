@@ -9,7 +9,7 @@ def main() -> None:
     parser.add_argument("topic", help="Research topic to analyze")
     args = parser.parse_args()
 
-    result = run_research_pipeline(args.topic, verbose=False)
+    result = run_research_pipeline(args.topic, verbose=True)
     print(json.dumps(result, ensure_ascii=False))
 
 
