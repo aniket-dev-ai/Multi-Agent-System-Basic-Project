@@ -44,4 +44,6 @@ html5lib>=1.1
 
 # Web Server
 flask>=3.0.0
-flask-cors>=4.0.0
+flask-cors>=4.0.0
+
+gunicorn
