@@ -17,10 +17,10 @@ logger = logging.getLogger(__name__)
 
 # Initialize LLM with valid model
 try:
-    llm = ChatOpenAI(model="gpt-4", temperature=0.2, max_retries=2)
+    llm = ChatOpenAI(model="gpt-4.1-mini-2025-04-14", temperature=0.2, max_retries=2)
 except Exception as e:
-    logger.warning(f"Failed to initialize gpt-4: {e}. Falling back to gpt-3.5-turbo")
-    llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.2, max_retries=2)
+    logger.warning(f"Failed to initialize gpt-4.1-mini-2025-04-14: {e}. Falling back to gpt-4.1-mini-2025-04-14")
+    llm = ChatOpenAI(model="gpt-4.1-mini-2025-04-14", temperature=0.2, max_retries=2)
 
 def build_search_agent() -> Any:
     """Build search agent with web search tool."""
