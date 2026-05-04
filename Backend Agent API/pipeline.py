@@ -70,12 +70,13 @@ def _extract_content(result: dict) -> str:
         raise ValueError(f"Failed to extract content from result: {e}")
 
 
-def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
+def run_research_pipeline(topic: str, verbose: bool = True, on_progress: Optional[callable] = None) -> dict:
     """Execute research pipeline with error handling.
     
     Args:
         topic: Research topic to analyze
         verbose: Whether to print progress
+        on_progress: Optional callback function receiving (step_id, message)
         
     Returns:
         Dictionary with search_results, scraped_content, report, feedback
@@ -88,14 +89,16 @@ def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
     topic = _validate_topic(topic)
     state: dict[str, str] = {}
 
-    def log(*args, **kwargs) -> None:
+    def log(message: str, step_id: Optional[str] = None) -> None:
         if verbose:
-            print(*args, **kwargs)
+            print(message)
+        if on_progress and step_id:
+            on_progress(step_id, message)
 
     try:
         # Step 1: Search
         log("\n" + "=" * 50)
-        log("Step 1 - Search agent is working...")
+        log("Step 1 - Search agent is working...", "searching")
         log("=" * 50)
         
         search_agent = build_search_agent()
@@ -107,11 +110,11 @@ def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
         log_struct("step_1", "Search completed successfully")
         log(f"Search result ({len(state['search_results'])} chars)\n")
         if verbose:
-            log(state["search_results"][:500] + "...")
+            print(state["search_results"][:500] + "...")
 
         # Step 2: Read/Scrape
         log("\n" + "=" * 50)
-        log("Step 2 - Reader agent is working...")
+        log("Step 2 - Reader agent is working...", "reading")
         log("=" * 50)
         
         reader_agent = build_reader_agent()
@@ -129,11 +132,11 @@ def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
         log_struct("step_2", "Content scraping completed")
         log(f"Scraped content ({len(state['scraped_content'])} chars)\n")
         if verbose:
-            log(state["scraped_content"][:500] + "...")
+            print(state["scraped_content"][:500] + "...")
 
         # Step 3: Generate Report
         log("\n" + "=" * 50)
-        log("Step 3 - Drafting the report...")
+        log("Step 3 - Drafting the report...", "writing")
         log("=" * 50)
         
         research_combined = (
@@ -146,18 +149,18 @@ def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
         log_struct("step_3", "Report generation completed")
         log(f"Report ({len(state['report'])} chars)\n")
         if verbose:
-            log(state["report"][:500] + "...")
+            print(state["report"][:500] + "...")
 
         # Step 4: Critic Review
         log("\n" + "=" * 50)
-        log("Step 4 - Critic is reviewing the report...")
+        log("Step 4 - Critic is reviewing the report...", "critic")
         log("=" * 50)
         
         state["feedback"] = critic_chain.invoke({"report": state["report"]})
         log_struct("step_4", "Critique completed")
         log(f"Feedback ({len(state['feedback'])} chars)\n")
         if verbose:
-            log(state["feedback"])
+            print(state["feedback"])
 
         logger.info("Pipeline completed successfully")
         return state
