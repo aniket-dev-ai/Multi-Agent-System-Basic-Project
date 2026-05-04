@@ -14,15 +14,15 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Configure CORS
-# Allowed origin from environment or default
-allowed_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3001')
+# Configure CORS — default matches the Next.js frontend port
+allowed_origin = os.getenv('CORS_ORIGIN', 'http://localhost:3000')
 CORS(app, resources={r"/api/*": {"origins": allowed_origin}}, supports_credentials=True)
 
 # Configuration
 MAX_TOPIC_LENGTH = 500
 
 def validate_topic(topic):
+    """Validate and sanitize topic string."""
     if not isinstance(topic, str):
         return None, "Topic must be a string"
     
@@ -32,6 +32,9 @@ def validate_topic(topic):
     
     if len(sanitized) > MAX_TOPIC_LENGTH:
         return None, f"Topic must be under {MAX_TOPIC_LENGTH} characters"
+    
+    if len(sanitized) < 2:
+        return None, "Topic must be at least 2 characters"
     
     return sanitized, None
 
@@ -81,8 +84,12 @@ def research_stream():
     def event_generator():
         # A queue to communicate between the pipeline thread and the generator
         q = queue.Queue()
+        # Cancellation signal for client disconnect
+        cancel_event = threading.Event()
 
         def on_progress(step, message):
+            if cancel_event.is_set():
+                return
             messages = {
                 'searching': 'Search agent is looking for information...',
                 'reading': 'Reader agent is analyzing search results...',
@@ -97,42 +104,48 @@ def research_stream():
         def run_pipeline():
             try:
                 result = run_research_pipeline(topic, verbose=True, on_progress=on_progress)
-                q.put(('result', {
-                    'success': True,
-                    'topic': topic,
-                    **result,
-                    'timestamp': datetime.now().isoformat()
-                }))
+                if not cancel_event.is_set():
+                    q.put(('result', {
+                        'success': True,
+                        'topic': topic,
+                        **result,
+                        'timestamp': datetime.now().isoformat()
+                    }))
             except Exception as e:
-                q.put(('error', {'error': str(e)}))
+                if not cancel_event.is_set():
+                    q.put(('error', {'error': str(e)}))
             finally:
                 q.put(('done', None))
 
         # Start pipeline in a separate thread
-        thread = threading.Thread(target=run_pipeline)
+        thread = threading.Thread(target=run_pipeline, daemon=True)
         thread.start()
 
         # Send initial status
         yield f"event: status\ndata: {json.dumps({'step': 'initializing', 'message': 'Starting research agents...'})}\n\n"
 
-        while True:
-            try:
-                event_type, data = q.get(timeout=300) # 5 min timeout
-                if event_type == 'done':
+        try:
+            while True:
+                try:
+                    event_type, data = q.get(timeout=300)  # 5 min timeout
+                    if event_type == 'done':
+                        break
+                    
+                    yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+                    
+                    if event_type in ['result', 'error']:
+                        break
+                except queue.Empty:
+                    yield f"event: error\ndata: {json.dumps({'error': 'Pipeline timed out'})}\n\n"
                     break
-                
-                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-                
-                if event_type in ['result', 'error']:
-                    break
-            except queue.Empty:
-                yield f"event: error\ndata: {json.dumps({'error': 'Pipeline timed out'})}\n\n"
-                break
+        except GeneratorExit:
+            # Client disconnected — signal the pipeline to stop queuing
+            cancel_event.set()
 
     return Response(stream_with_context(event_generator()), mimetype='text/event-stream')
 
 if __name__ == '__main__':
-    port = int(os.getenv('PORT', 3000))
+    port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     print(f" * Starting Research API on port {port} (Flask)")
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)

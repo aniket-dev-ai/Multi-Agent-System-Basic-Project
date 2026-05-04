@@ -1,6 +1,6 @@
 """Research pipeline orchestrator."""
 
-from typing import Optional
+from typing import Any, Optional
 import json
 import logging
 from datetime import datetime
@@ -24,6 +24,7 @@ LOG_FILE = "./log.txt"
 MAX_CONTENT_LENGTH = 10000  # Max chars for content chunks
 PIPELINE_TIMEOUT = 300  # 5 minutes
 
+
 def log_struct(step: str, message: str) -> None:
     """Log structured entry to file (consolidated I/O)."""
     entry = {
@@ -36,8 +37,10 @@ def log_struct(step: str, message: str) -> None:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except IOError as e:
         logger.error(f"Failed to write log: {e}")
+
+
 @retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=1, min=2, max=10))
-def _invoke_agent(agent: any, messages: list) -> dict:
+def _invoke_agent(agent: Any, messages: list) -> dict:
     """Invoke agent with retry logic."""
     return agent.invoke({"messages": messages})
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 export type ResearchResult = {
   success: boolean;
@@ -22,6 +22,13 @@ export function useResearch() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<ResearchStatus>({ step: 'idle', message: '' });
 
+  const reset = useCallback(() => {
+    setLoading(false);
+    setResult(null);
+    setError(null);
+    setStatus({ step: 'idle', message: '' });
+  }, []);
+
   const startResearch = async (topic: string) => {
     if (!topic.trim()) {
       setError('Topic cannot be empty');
@@ -34,7 +41,7 @@ export function useResearch() {
     setStatus({ step: 'initializing', message: 'Connecting to research agents...' });
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
       const response = await fetch(`${apiUrl}/api/research/stream?topic=${encodeURIComponent(topic)}`);
 
       if (!response.ok) {
@@ -58,27 +65,58 @@ export function useResearch() {
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
+        // Parse SSE protocol: track the current event type from `event:` lines
+        let currentEventType = 'message';
+
         for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEventType = line.slice(7).trim();
+            continue;
+          }
+
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              
-              // Handle different event types if needed, but here we check the content
-              if (data.step) {
-                setStatus({ step: data.step, message: data.message });
-              } else if (data.success && data.report) {
-                setResult(data);
-              } else if (data.error) {
-                throw new Error(data.error);
+
+              switch (currentEventType) {
+                case 'status':
+                  if (data.step) {
+                    setStatus({ step: data.step, message: data.message });
+                  }
+                  break;
+                case 'result':
+                  if (data.success && data.report) {
+                    setResult(data);
+                  }
+                  break;
+                case 'error':
+                  throw new Error(data.error || 'Unknown pipeline error');
+                default:
+                  // Fallback heuristic for any unlabeled events
+                  if (data.step) {
+                    setStatus({ step: data.step, message: data.message });
+                  } else if (data.success && data.report) {
+                    setResult(data);
+                  } else if (data.error) {
+                    throw new Error(data.error);
+                  }
               }
-            } catch (e) {
-              console.error('Error parsing SSE data:', e);
+            } catch (parseErr) {
+              // Re-throw intentional errors, only swallow JSON parse failures
+              if (parseErr instanceof Error && parseErr.message !== 'Unexpected end of JSON input') {
+                throw parseErr;
+              }
+              console.error('Error parsing SSE data:', parseErr);
             }
+
+            // Reset event type after processing data
+            currentEventType = 'message';
           }
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(message);
     } finally {
       setLoading(false);
       setStatus({ step: 'idle', message: '' });
@@ -91,6 +129,6 @@ export function useResearch() {
     error,
     status,
     startResearch,
+    reset,
   };
 }
-

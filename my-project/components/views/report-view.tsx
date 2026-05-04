@@ -26,17 +26,17 @@ export function ReportView({ content }: ReportViewProps) {
             <ReactMarkdown 
               remarkPlugins={[remarkGfm]}
               components={{
-                h1: ({node, ...props}) => <h1 className="text-3xl font-bold mt-8 mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 tracking-tight" {...props} />,
-                h2: ({node, ...props}) => <h2 className="text-2xl font-semibold mt-10 mb-4 text-primary/90 border-b border-border/50 pb-2" {...props} />,
-                h3: ({node, ...props}) => <h3 className="text-xl font-medium mt-8 mb-3 text-foreground/80" {...props} />,
-                p: ({node, ...props}) => <p className="leading-relaxed text-muted-foreground mb-5 text-[1.05rem]" {...props} />,
-                ul: ({node, ...props}) => <ul className="list-disc ml-6 mb-6 space-y-2 text-muted-foreground" {...props} />,
-                ol: ({node, ...props}) => <ol className="list-decimal ml-6 mb-6 space-y-2 text-muted-foreground" {...props} />,
-                li: ({node, ...props}) => <li className="pl-1" {...props} />,
-                strong: ({node, ...props}) => <strong className="font-semibold text-foreground" {...props} />,
-                em: ({node, ...props}) => <em className="italic text-foreground/80" {...props} />,
-                code: ({node, ...props}) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-primary border border-border/40" {...props} />,
-                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-primary/30 pl-4 py-1 my-6 italic text-muted-foreground bg-primary/5 rounded-r" {...props} />,
+                h1: ({...props}) => <h1 className="text-3xl font-bold mt-8 mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 tracking-tight" {...props} />,
+                h2: ({...props}) => <h2 className="text-2xl font-semibold mt-10 mb-4 text-primary/90 border-b border-border/50 pb-2" {...props} />,
+                h3: ({...props}) => <h3 className="text-xl font-medium mt-8 mb-3 text-foreground/80" {...props} />,
+                p: ({...props}) => <p className="leading-relaxed text-muted-foreground mb-5 text-[1.05rem]" {...props} />,
+                ul: ({...props}) => <ul className="list-disc ml-6 mb-6 space-y-2 text-muted-foreground" {...props} />,
+                ol: ({...props}) => <ol className="list-decimal ml-6 mb-6 space-y-2 text-muted-foreground" {...props} />,
+                li: ({...props}) => <li className="pl-1" {...props} />,
+                strong: ({...props}) => <strong className="font-semibold text-foreground" {...props} />,
+                em: ({...props}) => <em className="italic text-foreground/80" {...props} />,
+                code: ({...props}) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-primary border border-border/40" {...props} />,
+                blockquote: ({...props}) => <blockquote className="border-l-4 border-primary/30 pl-4 py-1 my-6 italic text-muted-foreground bg-primary/5 rounded-r" {...props} />,
               }}
             >
               {content}
